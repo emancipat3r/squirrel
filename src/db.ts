@@ -91,17 +91,13 @@ export async function clearActiveTask(): Promise<void> {
   }
 }
 
-export function formatTimestamp(ts: number): { date: string; time: string } {
+export function formatTimestamp(ts: number): string {
   const d = new Date(ts);
   const month = d.getMonth() + 1;
   const day = d.getDate();
-  const year = d.getFullYear();
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
-  return {
-    date: `${month}/${day}/${year}`,
-    time: `${hours}${minutes}`,
-  };
+  return `${month}/${day}/${hours}${minutes}`;
 }
 
 export function exportToday(entries: Entry[]): string {
@@ -109,9 +105,9 @@ export function exportToday(entries: Entry[]): string {
   const sorted = [...entries].sort((a, b) => a.timestamp - b.timestamp);
   return sorted
     .map((e) => {
-      const { date, time } = formatTimestamp(e.timestamp);
+      const ts = formatTimestamp(e.timestamp);
       const lines = e.text.split("\n");
-      const first = `${date}\t${time}\t${lines[0]}`;
+      const first = `${ts}\t${lines[0]}`;
       if (lines.length === 1) return first;
       const rest = lines.slice(1).map((l) => `\t\t${l}`);
       return [first, ...rest].join("\n");

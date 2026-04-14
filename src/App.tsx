@@ -186,13 +186,10 @@ function App() {
 
       <div className="feed">
         {entries.map((entry) => {
-          const { date, time } = formatTimestamp(entry.timestamp);
+          const ts = formatTimestamp(entry.timestamp);
           return (
             <div key={entry.id} className="entry">
-              <span className="entry-ts">
-                {date}
-                <span className="entry-time">{time}</span>
-              </span>
+              <span className="entry-ts">{ts}</span>
               <span className="entry-text">{entry.text}</span>
             </div>
           );
