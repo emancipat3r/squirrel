@@ -240,10 +240,6 @@ body {
   gap: 10px;
 }
 
-.entry-time {
-  color: var(--text-muted);
-}
-
 .entry-text {
   font-size: 14px;
   color: var(--text);
