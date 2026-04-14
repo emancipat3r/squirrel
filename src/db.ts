@@ -35,11 +35,11 @@ function startOfToday(): number {
 }
 
 export async function getTodayEntries(): Promise<Entry[]> {
-  return db.entries
+  const arr = await db.entries
     .where("timestamp")
     .aboveOrEqual(startOfToday())
-    .reverse()
-    .sortBy("timestamp");
+    .toArray();
+  return arr.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function addEntry(

@@ -40,3 +40,13 @@ Serve the `dist/` directory from any static host. HTTPS is required for the serv
 
 Navigate to the hosted URL in Chrome and tap **Menu → Add to Home Screen**. The app launches standalone with no browser chrome and works offline.
 
+## Docker Deployment
+
+```sh
+docker compose up -d --build
+```
+
+This builds and runs the app on port 8080. The container serves the static build via nginx on port 80 internally.
+
+HTTPS is **not** handled by the container — put a reverse proxy (Caddy, Traefik, nginx proxy manager, etc.) in front of it to terminate TLS. PWA install and service worker registration both require HTTPS.
+
