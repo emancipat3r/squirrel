@@ -4,6 +4,8 @@ A single-user, local-first PWA for interstitial journaling — timestamped quick
 
 Inspired by the practice of journaling each time you switch tasks, so "what was I doing?" is always answerable.
 
+![Squirrel screenshot](screenshot.png)
+
 ## Features
 
 - **Sticky "Working on:" pin** — set a current task and all entries auto-associate with it
