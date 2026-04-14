@@ -66,6 +66,8 @@ function App() {
     const label = pinInput.trim();
     if (label) {
       await setActiveTask(label);
+    } else {
+      await clearActiveTask();
     }
     setPinInput("");
     setEditingPin(false);
@@ -92,7 +94,8 @@ function App() {
   };
 
   const handleExport = async () => {
-    const text = exportToday(entries);
+    const fresh = await getTodayEntries();
+    const text = exportToday(fresh);
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -141,7 +144,7 @@ function App() {
             value={pinInput}
             onChange={(e) => setPinInput(e.target.value)}
             onKeyDown={handlePinKeyDown}
-            onBlur={handlePinSubmit}
+            onBlur={() => { setPinInput(""); setEditingPin(false); }}
             placeholder="What are you working on?"
           />
         ) : activeTask ? (

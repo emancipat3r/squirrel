@@ -1,0 +1,7 @@
+services:
+  squirrel:
+    build: .
+    container_name: squirrel
+    restart: unless-stopped
+    ports:
+      - "8080:80"
