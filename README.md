@@ -8,9 +8,13 @@ Inspired by the practice of journaling each time you switch tasks, so "what was 
 
 ## Features
 
+- **Three-column layout** — Thoughts parking lot (left), journal (center), Questions parking lot (right)
+- **Parking lots** — notebook-style cells for stashing thoughts and questions outside the main journal flow
+- **Flag and reorder** — flag important notes to pin them to the top, drag-and-drop to rearrange
 - **Sticky "Working on:" pin** — set a current task and all entries auto-associate with it
 - **Quick-capture input** — open app, type, Enter, done. Shift+Enter for newlines
 - **Reverse-chronological feed** — today's entries with military-time timestamps
+- **Theme picker** — 6 built-in themes (Gruvbox Dark, Nord, Catppuccin Mocha, Tokyo Night, Solarized Dark, Rose Pine) with glowing accent text, persisted in localStorage
 - **Clipboard export** — copies the day's log as tab-aligned plaintext
 - **Clear day** — wipe today's entries with a two-click confirm
 - **PWA** — installable on desktop and Android, works offline
