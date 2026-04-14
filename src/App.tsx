@@ -12,10 +12,12 @@ import {
   formatTimestamp,
   exportToday,
   getNotes,
+  getCompletedNotes,
   addNote,
   updateNote,
   deleteNote,
   toggleNoteFlag,
+  toggleNoteComplete,
   reorderNotes,
 } from "./db";
 import { themes, loadThemeId, saveThemeId, applyTheme } from "./themes";
@@ -98,23 +100,27 @@ function NoteCell({
   onUpdate,
   onDelete,
   onToggleFlag,
+  onComplete,
   onDragStart,
   onDragOver,
   onDragLeave,
   onDrop,
   isDragging,
   dropPosition,
+  archived,
 }: {
   note: Note;
   onUpdate: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggleFlag: (id: string) => Promise<void>;
+  onComplete: (id: string) => Promise<void>;
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent, id: string) => void;
   isDragging: boolean;
   dropPosition: "above" | "below" | null;
+  archived?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(note.text);
@@ -143,26 +149,29 @@ function NoteCell({
       className={[
         "note-cell",
         note.flagged ? "note-cell--flagged" : "",
+        archived ? "note-cell--completed" : "",
         isDragging ? "note-cell--dragging" : "",
         dropPosition === "above" ? "note-cell--drop-above" : "",
         dropPosition === "below" ? "note-cell--drop-below" : "",
       ].filter(Boolean).join(" ")}
-      draggable={!editing}
+      draggable={!editing && !archived}
       onDragStart={(e) => onDragStart(e, note.id)}
       onDragOver={(e) => onDragOver(e, note.id)}
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, note.id)}
     >
-      <div className="note-cell-drag" title="Drag to reorder">
-        <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
-          <circle cx="2" cy="2" r="1.2" />
-          <circle cx="6" cy="2" r="1.2" />
-          <circle cx="2" cy="7" r="1.2" />
-          <circle cx="6" cy="7" r="1.2" />
-          <circle cx="2" cy="12" r="1.2" />
-          <circle cx="6" cy="12" r="1.2" />
-        </svg>
-      </div>
+      {!archived && (
+        <div className="note-cell-drag" title="Drag to reorder">
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+            <circle cx="2" cy="2" r="1.2" />
+            <circle cx="6" cy="2" r="1.2" />
+            <circle cx="2" cy="7" r="1.2" />
+            <circle cx="6" cy="7" r="1.2" />
+            <circle cx="2" cy="12" r="1.2" />
+            <circle cx="6" cy="12" r="1.2" />
+          </svg>
+        </div>
+      )}
       {editing ? (
         <textarea
           ref={textareaRef}
@@ -188,13 +197,27 @@ function NoteCell({
         </div>
       )}
       <div className="note-cell-actions">
+        {!archived && (
+          <button
+            className={`note-cell-flag ${note.flagged ? "note-cell-flag--active" : ""}`}
+            onClick={() => onToggleFlag(note.id)}
+            title={note.flagged ? "Unflag" : "Flag as important"}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill={note.flagged ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.2">
+              <path d="M2 1v10M2 1.5l8 2.5-8 2.5" />
+            </svg>
+          </button>
+        )}
         <button
-          className={`note-cell-flag ${note.flagged ? "note-cell-flag--active" : ""}`}
-          onClick={() => onToggleFlag(note.id)}
-          title={note.flagged ? "Unflag" : "Flag as important"}
+          className={`note-cell-check ${archived ? "note-cell-check--done" : ""}`}
+          onClick={() => onComplete(note.id)}
+          title={archived ? "Restore" : "Mark complete"}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill={note.flagged ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.2">
-            <path d="M2 1v10M2 1.5l8 2.5-8 2.5" />
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            {archived
+              ? <path d="M3 7h8" />
+              : <path d="M3 7l3 3 5-6" />
+            }
           </svg>
         </button>
         <button
@@ -215,21 +238,26 @@ function ParkingLot({
   title,
   type,
   notes,
+  completedNotes,
   onAdd,
   onUpdate,
   onDelete,
   onToggleFlag,
+  onComplete,
   onReorder,
 }: {
   title: string;
   type: "thought" | "question";
   notes: Note[];
+  completedNotes: Note[];
   onAdd: (text: string, type: "thought" | "question") => Promise<void>;
   onUpdate: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggleFlag: (id: string) => Promise<void>;
+  onComplete: (id: string) => Promise<void>;
   onReorder: (orderedIds: string[]) => Promise<void>;
 }) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [newValue, setNewValue] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -346,6 +374,7 @@ function ParkingLot({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onToggleFlag={onToggleFlag}
+            onComplete={onComplete}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -354,11 +383,55 @@ function ParkingLot({
             dropPosition={dropTargetId === note.id ? dropPos : null}
           />
         ))}
-        {notes.length === 0 && (
+        {notes.length === 0 && completedNotes.length === 0 && (
           <div className="parking-lot-empty">
             {type === "thought"
               ? "No thoughts parked yet"
               : "No questions yet"}
+          </div>
+        )}
+        {completedNotes.length > 0 && (
+          <div className="archive">
+            <button
+              className="archive-toggle"
+              onClick={() => setArchiveOpen(!archiveOpen)}
+            >
+              <svg
+                className={`archive-chevron ${archiveOpen ? "archive-chevron--open" : ""}`}
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 3l4 3-4 3" />
+              </svg>
+              Completed ({completedNotes.length})
+            </button>
+            {archiveOpen && (
+              <div className="archive-list">
+                {completedNotes.map((note) => (
+                  <NoteCell
+                    key={note.id}
+                    note={note}
+                    onUpdate={onUpdate}
+                    onDelete={onDelete}
+                    onToggleFlag={onToggleFlag}
+                    onComplete={onComplete}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    isDragging={false}
+                    dropPosition={null}
+                    archived
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -378,6 +451,8 @@ function App() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [thoughts, setThoughts] = useState<Note[]>([]);
   const [questions, setQuestions] = useState<Note[]>([]);
+  const [completedThoughts, setCompletedThoughts] = useState<Note[]>([]);
+  const [completedQuestions, setCompletedQuestions] = useState<Note[]>([]);
   const [themeId, setThemeId] = useState(loadThemeId);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pinInputRef = useRef<HTMLInputElement>(null);
@@ -390,16 +465,20 @@ function App() {
   }, [themeId]);
 
   const refresh = useCallback(async () => {
-    const [todayEntries, task, t, q] = await Promise.all([
+    const [todayEntries, task, t, q, ct, cq] = await Promise.all([
       getTodayEntries(),
       getActiveTask(),
       getNotes("thought"),
       getNotes("question"),
+      getCompletedNotes("thought"),
+      getCompletedNotes("question"),
     ]);
     setEntries(todayEntries);
     setActiveTaskState(task ?? null);
     setThoughts(t);
     setQuestions(q);
+    setCompletedThoughts(ct);
+    setCompletedQuestions(cq);
   }, []);
 
   useEffect(() => {
@@ -505,6 +584,11 @@ function App() {
     await refresh();
   };
 
+  const handleComplete = async (id: string) => {
+    await toggleNoteComplete(id);
+    await refresh();
+  };
+
   const handleReorder = async (orderedIds: string[]) => {
     await reorderNotes(orderedIds);
     await refresh();
@@ -538,10 +622,12 @@ function App() {
           title="Thoughts"
           type="thought"
           notes={thoughts}
+          completedNotes={completedThoughts}
           onAdd={handleAddNote}
           onUpdate={handleUpdateNote}
           onDelete={handleDeleteNote}
           onToggleFlag={handleToggleFlag}
+          onComplete={handleComplete}
           onReorder={handleReorder}
         />
 
@@ -621,10 +707,12 @@ function App() {
           title="Questions"
           type="question"
           notes={questions}
+          completedNotes={completedQuestions}
           onAdd={handleAddNote}
           onUpdate={handleUpdateNote}
           onDelete={handleDeleteNote}
           onToggleFlag={handleToggleFlag}
+          onComplete={handleComplete}
           onReorder={handleReorder}
         />
       </div>

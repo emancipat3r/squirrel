@@ -21,6 +21,7 @@ export type Note = {
   timestamp: number;
   flagged: boolean;
   order: number;
+  completed: boolean;
 };
 
 const db = new Dexie("squirrel") as Dexie & {
@@ -48,6 +49,16 @@ db.version(3).stores({
   return tx.table("notes").toCollection().modify((note) => {
     if (note.flagged === undefined) note.flagged = false;
     if (note.order === undefined) note.order = note.timestamp;
+  });
+});
+
+db.version(4).stores({
+  entries: "id, timestamp, taskId",
+  tasks: "id, startedAt",
+  notes: "id, type, timestamp, order",
+}).upgrade((tx) => {
+  return tx.table("notes").toCollection().modify((note) => {
+    if (note.completed === undefined) note.completed = false;
   });
 });
 
@@ -136,10 +147,21 @@ export async function getNotes(
     .where("type")
     .equals(type)
     .sortBy("order");
+  const active = notes.filter((n) => !n.completed);
   // Flagged items float to top, preserve relative order within each group
-  const flagged = notes.filter((n) => n.flagged);
-  const unflagged = notes.filter((n) => !n.flagged);
+  const flagged = active.filter((n) => n.flagged);
+  const unflagged = active.filter((n) => !n.flagged);
   return [...flagged, ...unflagged];
+}
+
+export async function getCompletedNotes(
+  type: "thought" | "question"
+): Promise<Note[]> {
+  const notes = await db.notes
+    .where("type")
+    .equals(type)
+    .sortBy("order");
+  return notes.filter((n) => n.completed);
 }
 
 export async function addNote(
@@ -154,6 +176,7 @@ export async function addNote(
     type,
     timestamp: Date.now(),
     flagged: false,
+    completed: false,
     order: maxOrder + 1,
   };
   await db.notes.add(note);
@@ -168,6 +191,13 @@ export async function toggleNoteFlag(id: string): Promise<void> {
   const note = await db.notes.get(id);
   if (note) {
     await db.notes.update(id, { flagged: !note.flagged });
+  }
+}
+
+export async function toggleNoteComplete(id: string): Promise<void> {
+  const note = await db.notes.get(id);
+  if (note) {
+    await db.notes.update(id, { completed: !note.completed, flagged: false });
   }
 }
 
