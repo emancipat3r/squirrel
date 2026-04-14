@@ -14,14 +14,41 @@ export type Task = {
   endedAt: number | null;
 };
 
+export type Note = {
+  id: string;
+  text: string;
+  type: "thought" | "question";
+  timestamp: number;
+  flagged: boolean;
+  order: number;
+};
+
 const db = new Dexie("squirrel") as Dexie & {
   entries: EntityTable<Entry, "id">;
   tasks: EntityTable<Task, "id">;
+  notes: EntityTable<Note, "id">;
 };
 
 db.version(1).stores({
   entries: "id, timestamp, taskId",
   tasks: "id, startedAt",
+});
+
+db.version(2).stores({
+  entries: "id, timestamp, taskId",
+  tasks: "id, startedAt",
+  notes: "id, type, timestamp",
+});
+
+db.version(3).stores({
+  entries: "id, timestamp, taskId",
+  tasks: "id, startedAt",
+  notes: "id, type, timestamp, order",
+}).upgrade((tx) => {
+  return tx.table("notes").toCollection().modify((note) => {
+    if (note.flagged === undefined) note.flagged = false;
+    if (note.order === undefined) note.order = note.timestamp;
+  });
 });
 
 export { db };
@@ -98,6 +125,62 @@ export function formatTimestamp(ts: number): string {
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${month}/${day}/${hours}${minutes}`;
+}
+
+// Notes (parking lot)
+
+export async function getNotes(
+  type: "thought" | "question"
+): Promise<Note[]> {
+  const notes = await db.notes
+    .where("type")
+    .equals(type)
+    .sortBy("order");
+  // Flagged items float to top, preserve relative order within each group
+  const flagged = notes.filter((n) => n.flagged);
+  const unflagged = notes.filter((n) => !n.flagged);
+  return [...flagged, ...unflagged];
+}
+
+export async function addNote(
+  text: string,
+  type: "thought" | "question"
+): Promise<Note> {
+  const existing = await db.notes.where("type").equals(type).toArray();
+  const maxOrder = existing.reduce((m, n) => Math.max(m, n.order ?? 0), 0);
+  const note: Note = {
+    id: crypto.randomUUID(),
+    text: text.trim(),
+    type,
+    timestamp: Date.now(),
+    flagged: false,
+    order: maxOrder + 1,
+  };
+  await db.notes.add(note);
+  return note;
+}
+
+export async function updateNote(id: string, text: string): Promise<void> {
+  await db.notes.update(id, { text });
+}
+
+export async function toggleNoteFlag(id: string): Promise<void> {
+  const note = await db.notes.get(id);
+  if (note) {
+    await db.notes.update(id, { flagged: !note.flagged });
+  }
+}
+
+export async function reorderNotes(orderedIds: string[]): Promise<void> {
+  await db.transaction("rw", db.notes, async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.notes.update(orderedIds[i], { order: i });
+    }
+  });
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await db.notes.delete(id);
 }
 
 export function exportToday(entries: Entry[]): string {
