@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment, type ReactNode } from "react";
 import {
   type Entry,
   type Task,
   type Note,
+  type TodoStatus,
   getTodayEntries,
   addEntry,
   clearToday,
@@ -19,6 +20,7 @@ import {
   toggleNoteFlag,
   toggleNoteComplete,
   reorderNotes,
+  moveNote,
 } from "./db";
 import { themes, loadThemeId, saveThemeId, applyTheme } from "./themes";
 
@@ -93,14 +95,67 @@ function ThemePicker({
   );
 }
 
+/* ─── Todo Checkbox (3-state) ─── */
+
+function TodoCheckbox({
+  status,
+  archived,
+  onClick,
+}: {
+  status: TodoStatus;
+  archived?: boolean;
+  onClick: () => void;
+}) {
+  const effective: TodoStatus = archived ? "done" : status;
+  const title = archived
+    ? "Restore"
+    : effective === "pending"
+      ? "Mark in progress"
+      : effective === "started"
+        ? "Mark done"
+        : "Reset";
+  return (
+    <button
+      type="button"
+      className={`todo-checkbox todo-checkbox--${effective}`}
+      onClick={onClick}
+      title={title}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="2" y="2" width="12" height="12" rx="2.5" />
+        {effective === "started" && <path d="M3.5 12.5 L12.5 3.5" />}
+        {effective === "done" && (
+          <>
+            <path d="M4 4 L12 12" />
+            <path d="M12 4 L4 12" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
 /* ─── Note Cell ─── */
+
+type DropPosition = "above" | "below" | "child";
 
 function NoteCell({
   note,
+  depth = 0,
   onUpdate,
   onDelete,
   onToggleFlag,
   onComplete,
+  onAddSubtask,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -110,18 +165,21 @@ function NoteCell({
   archived,
 }: {
   note: Note;
+  depth?: number;
   onUpdate: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggleFlag: (id: string) => Promise<void>;
   onComplete: (id: string) => Promise<void>;
+  onAddSubtask?: (id: string) => void;
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent, id: string) => void;
   isDragging: boolean;
-  dropPosition: "above" | "below" | null;
+  dropPosition: DropPosition | null;
   archived?: boolean;
 }) {
+  const isTodo = note.type === "todo";
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(note.text);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -153,7 +211,10 @@ function NoteCell({
         isDragging ? "note-cell--dragging" : "",
         dropPosition === "above" ? "note-cell--drop-above" : "",
         dropPosition === "below" ? "note-cell--drop-below" : "",
+        dropPosition === "child" ? "note-cell--drop-child" : "",
+        depth > 0 ? "note-cell--nested" : "",
       ].filter(Boolean).join(" ")}
+      style={depth > 0 ? { marginLeft: depth * 22 } : undefined}
       draggable={!editing && !archived}
       onDragStart={(e) => onDragStart(e, note.id)}
       onDragOver={(e) => onDragOver(e, note.id)}
@@ -171,6 +232,13 @@ function NoteCell({
             <circle cx="6" cy="12" r="1.2" />
           </svg>
         </div>
+      )}
+      {isTodo && (
+        <TodoCheckbox
+          status={note.status ?? "pending"}
+          archived={archived}
+          onClick={() => onComplete(note.id)}
+        />
       )}
       {editing ? (
         <textarea
@@ -197,6 +265,17 @@ function NoteCell({
         </div>
       )}
       <div className="note-cell-actions">
+        {isTodo && !archived && onAddSubtask && (
+          <button
+            className="note-cell-subtask"
+            onClick={() => onAddSubtask(note.id)}
+            title="Add subtask"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M6 2v8M2 6h8" />
+            </svg>
+          </button>
+        )}
         {!archived && (
           <button
             className={`note-cell-flag ${note.flagged ? "note-cell-flag--active" : ""}`}
@@ -208,18 +287,20 @@ function NoteCell({
             </svg>
           </button>
         )}
-        <button
-          className={`note-cell-check ${archived ? "note-cell-check--done" : ""}`}
-          onClick={() => onComplete(note.id)}
-          title={archived ? "Restore" : "Mark complete"}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            {archived
-              ? <path d="M3 7h8" />
-              : <path d="M3 7l3 3 5-6" />
-            }
-          </svg>
-        </button>
+        {!isTodo && (
+          <button
+            className={`note-cell-check ${archived ? "note-cell-check--done" : ""}`}
+            onClick={() => onComplete(note.id)}
+            title={archived ? "Restore" : "Mark complete"}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              {archived
+                ? <path d="M3 7h8" />
+                : <path d="M3 7l3 3 5-6" />
+              }
+            </svg>
+          </button>
+        )}
         <button
           className="note-cell-delete"
           onClick={() => onDelete(note.id)}
@@ -228,6 +309,85 @@ function NoteCell({
           &times;
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ─── Tree helpers (todos only) ─── */
+
+type TodoNode = Note & { children: TodoNode[] };
+
+function buildTodoTree(notes: Note[]): TodoNode[] {
+  const map = new Map<string, TodoNode>();
+  notes.forEach((n) => map.set(n.id, { ...n, children: [] }));
+  const roots: TodoNode[] = [];
+  notes.forEach((n) => {
+    const node = map.get(n.id)!;
+    if (n.parentId && map.has(n.parentId)) {
+      map.get(n.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  const sortRec = (arr: TodoNode[]) => {
+    arr.sort((a, b) => a.order - b.order);
+    arr.forEach((c) => sortRec(c.children));
+  };
+  sortRec(roots);
+  return roots;
+}
+
+/* ─── Subtask Input (inline, appears under a parent when "+" is clicked) ─── */
+
+function SubtaskInput({
+  depth,
+  onSubmit,
+  onClose,
+}: {
+  depth: number;
+  onSubmit: (text: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+
+  const submit = async () => {
+    const t = value.trim();
+    if (!t) return;
+    await onSubmit(t);
+    setValue("");
+    ref.current?.focus();
+  };
+
+  return (
+    <div
+      className="todo-subtask-input"
+      style={{ marginLeft: depth * 22 }}
+    >
+      <textarea
+        ref={ref}
+        className="todo-subtask-input-field"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+          if (e.key === "Escape") {
+            onClose();
+          }
+        }}
+        onBlur={() => {
+          if (!value.trim()) onClose();
+        }}
+        rows={1}
+        placeholder="Subtask..."
+      />
     </div>
   );
 }
@@ -245,24 +405,37 @@ function ParkingLot({
   onToggleFlag,
   onComplete,
   onReorder,
+  onMove,
 }: {
   title: string;
-  type: "thought" | "question";
+  type: "thought" | "question" | "todo";
   notes: Note[];
   completedNotes: Note[];
-  onAdd: (text: string, type: "thought" | "question") => Promise<void>;
+  onAdd: (
+    text: string,
+    type: "thought" | "question" | "todo",
+    parentId?: string | null
+  ) => Promise<void>;
   onUpdate: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggleFlag: (id: string) => Promise<void>;
   onComplete: (id: string) => Promise<void>;
   onReorder: (orderedIds: string[]) => Promise<void>;
+  onMove?: (
+    dragId: string,
+    targetId: string,
+    position: DropPosition
+  ) => Promise<void>;
 }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [newValue, setNewValue] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [dropPos, setDropPos] = useState<"above" | "below" | null>(null);
+  const [dropPos, setDropPos] = useState<DropPosition | null>(null);
+  const [addingSubtaskFor, setAddingSubtaskFor] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const isTodo = type === "todo";
 
   const handleAdd = async () => {
     const text = newValue.trim();
@@ -293,10 +466,19 @@ function ParkingLot({
       return;
     }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const pos = e.clientY < midY ? "above" : "below";
-    setDropTargetId(targetId);
-    setDropPos(pos);
+    const y = e.clientY - rect.top;
+    if (isTodo) {
+      const ratio = y / rect.height;
+      const pos: DropPosition =
+        ratio < 0.25 ? "above" : ratio < 0.75 ? "child" : "below";
+      setDropTargetId(targetId);
+      setDropPos(pos);
+    } else {
+      const midY = rect.height / 2;
+      const pos: DropPosition = y < midY ? "above" : "below";
+      setDropTargetId(targetId);
+      setDropPos(pos);
+    }
   };
 
   const handleDragLeave = () => {
@@ -316,26 +498,77 @@ function ParkingLot({
     setDropTargetId(null);
     setDropPos(null);
 
-    if (!dragId || dragId === targetId) {
+    if (!dragId || dragId === targetId || !currentDropPos) {
+      setDragId(null);
+      return;
+    }
+
+    if (isTodo && onMove) {
+      await onMove(dragId, targetId, currentDropPos);
       setDragId(null);
       return;
     }
 
     const ids = notes.map((n) => n.id);
     const fromIdx = ids.indexOf(dragId);
-    let toIdx = ids.indexOf(targetId);
-    if (fromIdx === -1 || toIdx === -1) return;
-
+    if (fromIdx === -1) {
+      setDragId(null);
+      return;
+    }
     ids.splice(fromIdx, 1);
-    // Recalculate toIdx after removal
-    toIdx = ids.indexOf(targetId);
+    const toIdx = ids.indexOf(targetId);
+    if (toIdx === -1) {
+      setDragId(null);
+      return;
+    }
     const insertIdx = currentDropPos === "below" ? toIdx + 1 : toIdx;
     ids.splice(insertIdx, 0, dragId);
     await onReorder(ids);
     setDragId(null);
   };
 
+  const handleAddSubtask = (parentId: string) => {
+    setAddingSubtaskFor(parentId);
+  };
+
+  const renderTodoNode = (
+    node: TodoNode,
+    depth: number,
+    archived: boolean
+  ): ReactNode => (
+    <Fragment key={node.id}>
+      <NoteCell
+        note={node}
+        depth={depth}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onToggleFlag={onToggleFlag}
+        onComplete={onComplete}
+        onAddSubtask={archived ? undefined : handleAddSubtask}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        isDragging={dragId === node.id}
+        dropPosition={dropTargetId === node.id ? dropPos : null}
+        archived={archived}
+      />
+      {node.children.map((child) => renderTodoNode(child, depth + 1, archived))}
+      {!archived && addingSubtaskFor === node.id && (
+        <SubtaskInput
+          depth={depth + 1}
+          onSubmit={async (text) => {
+            await onAdd(text, "todo", node.id);
+          }}
+          onClose={() => setAddingSubtaskFor(null)}
+        />
+      )}
+    </Fragment>
+  );
+
   const flaggedCount = notes.filter((n) => n.flagged).length;
+  const todoRoots = isTodo ? buildTodoTree(notes) : [];
+  const archivedTodoRoots = isTodo ? buildTodoTree(completedNotes) : [];
 
   return (
     <div className={`parking-lot parking-lot--${type}`}>
@@ -361,33 +594,41 @@ function ParkingLot({
           onChange={(e) => setNewValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            type === "thought" ? "Park a thought..." : "Drop a question..."
+            type === "thought"
+              ? "Park a thought..."
+              : type === "question"
+                ? "Drop a question..."
+                : "Add a to-do..."
           }
           rows={2}
         />
       </div>
       <div className="parking-lot-cells" onDragEnd={handleDragEnd}>
-        {notes.map((note) => (
-          <NoteCell
-            key={note.id}
-            note={note}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            onToggleFlag={onToggleFlag}
-            onComplete={onComplete}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            isDragging={dragId === note.id}
-            dropPosition={dropTargetId === note.id ? dropPos : null}
-          />
-        ))}
+        {isTodo
+          ? todoRoots.map((root) => renderTodoNode(root, 0, false))
+          : notes.map((note) => (
+              <NoteCell
+                key={note.id}
+                note={note}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+                onToggleFlag={onToggleFlag}
+                onComplete={onComplete}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                isDragging={dragId === note.id}
+                dropPosition={dropTargetId === note.id ? dropPos : null}
+              />
+            ))}
         {notes.length === 0 && completedNotes.length === 0 && (
           <div className="parking-lot-empty">
             {type === "thought"
               ? "No thoughts parked yet"
-              : "No questions yet"}
+              : type === "question"
+                ? "No questions yet"
+                : "No to-dos yet"}
           </div>
         )}
         {completedNotes.length > 0 && (
@@ -413,23 +654,27 @@ function ParkingLot({
             </button>
             {archiveOpen && (
               <div className="archive-list">
-                {completedNotes.map((note) => (
-                  <NoteCell
-                    key={note.id}
-                    note={note}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
-                    onToggleFlag={onToggleFlag}
-                    onComplete={onComplete}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    isDragging={false}
-                    dropPosition={null}
-                    archived
-                  />
-                ))}
+                {isTodo
+                  ? archivedTodoRoots.map((root) =>
+                      renderTodoNode(root, 0, true)
+                    )
+                  : completedNotes.map((note) => (
+                      <NoteCell
+                        key={note.id}
+                        note={note}
+                        onUpdate={onUpdate}
+                        onDelete={onDelete}
+                        onToggleFlag={onToggleFlag}
+                        onComplete={onComplete}
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        isDragging={false}
+                        dropPosition={null}
+                        archived
+                      />
+                    ))}
               </div>
             )}
           </div>
@@ -451,8 +696,10 @@ function App() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [thoughts, setThoughts] = useState<Note[]>([]);
   const [questions, setQuestions] = useState<Note[]>([]);
+  const [todos, setTodos] = useState<Note[]>([]);
   const [completedThoughts, setCompletedThoughts] = useState<Note[]>([]);
   const [completedQuestions, setCompletedQuestions] = useState<Note[]>([]);
+  const [completedTodos, setCompletedTodos] = useState<Note[]>([]);
   const [themeId, setThemeId] = useState(loadThemeId);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pinInputRef = useRef<HTMLInputElement>(null);
@@ -465,20 +712,24 @@ function App() {
   }, [themeId]);
 
   const refresh = useCallback(async () => {
-    const [todayEntries, task, t, q, ct, cq] = await Promise.all([
+    const [todayEntries, task, t, q, td, ct, cq, ctd] = await Promise.all([
       getTodayEntries(),
       getActiveTask(),
       getNotes("thought"),
       getNotes("question"),
+      getNotes("todo"),
       getCompletedNotes("thought"),
       getCompletedNotes("question"),
+      getCompletedNotes("todo"),
     ]);
     setEntries(todayEntries);
     setActiveTaskState(task ?? null);
     setThoughts(t);
     setQuestions(q);
+    setTodos(td);
     setCompletedThoughts(ct);
     setCompletedQuestions(cq);
+    setCompletedTodos(ctd);
   }, []);
 
   useEffect(() => {
@@ -563,9 +814,19 @@ function App() {
 
   const handleAddNote = async (
     text: string,
-    type: "thought" | "question"
+    type: "thought" | "question" | "todo",
+    parentId: string | null = null
   ) => {
-    await addNote(text, type);
+    await addNote(text, type, parentId);
+    await refresh();
+  };
+
+  const handleMoveTodo = async (
+    dragId: string,
+    targetId: string,
+    position: "above" | "below" | "child"
+  ) => {
+    await moveNote(dragId, targetId, position);
     await refresh();
   };
 
@@ -616,6 +877,20 @@ function App() {
           <ThemePicker currentId={themeId} onChange={setThemeId} />
         </div>
       </header>
+
+      <ParkingLot
+        title="To Do"
+        type="todo"
+        notes={todos}
+        completedNotes={completedTodos}
+        onAdd={handleAddNote}
+        onUpdate={handleUpdateNote}
+        onDelete={handleDeleteNote}
+        onToggleFlag={handleToggleFlag}
+        onComplete={handleComplete}
+        onReorder={handleReorder}
+        onMove={handleMoveTodo}
+      />
 
       <div className="columns">
         <ParkingLot

@@ -32,6 +32,8 @@ export const themes: Theme[] = [
       "--question-rgb": "250, 189, 47",
       "--danger": "#fb4934",
       "--danger-rgb": "251, 73, 52",
+      "--todo-accent": "#d3869b",
+      "--todo-rgb": "211, 134, 155",
     },
   },
   {
@@ -61,6 +63,8 @@ export const themes: Theme[] = [
       "--question-rgb": "235, 203, 139",
       "--danger": "#bf616a",
       "--danger-rgb": "191, 97, 106",
+      "--todo-accent": "#b48ead",
+      "--todo-rgb": "180, 142, 173",
     },
   },
   {
@@ -90,6 +94,8 @@ export const themes: Theme[] = [
       "--question-rgb": "249, 226, 175",
       "--danger": "#f38ba8",
       "--danger-rgb": "243, 139, 168",
+      "--todo-accent": "#89b4fa",
+      "--todo-rgb": "137, 180, 250",
     },
   },
   {
@@ -119,6 +125,8 @@ export const themes: Theme[] = [
       "--question-rgb": "224, 175, 104",
       "--danger": "#f7768e",
       "--danger-rgb": "247, 118, 142",
+      "--todo-accent": "#bb9af7",
+      "--todo-rgb": "187, 154, 247",
     },
   },
   {
@@ -148,6 +156,8 @@ export const themes: Theme[] = [
       "--question-rgb": "181, 137, 0",
       "--danger": "#dc322f",
       "--danger-rgb": "220, 50, 47",
+      "--todo-accent": "#6c71c4",
+      "--todo-rgb": "108, 113, 196",
     },
   },
   {
@@ -177,6 +187,8 @@ export const themes: Theme[] = [
       "--question-rgb": "246, 193, 119",
       "--danger": "#eb6f92",
       "--danger-rgb": "235, 111, 146",
+      "--todo-accent": "#31748f",
+      "--todo-rgb": "49, 116, 143",
     },
   },
 ];
@@ -208,6 +220,8 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty("--secondary-glow", `rgba(${r["--secondary-rgb"]}, 0.25)`);
   root.style.setProperty("--question-dim", `rgba(${r["--question-rgb"]}, 0.12)`);
   root.style.setProperty("--question-glow", `rgba(${r["--question-rgb"]}, 0.25)`);
+  root.style.setProperty("--todo-dim", `rgba(${r["--todo-rgb"]}, 0.12)`);
+  root.style.setProperty("--todo-glow", `rgba(${r["--todo-rgb"]}, 0.25)`);
   root.style.setProperty("--danger-dim", `rgba(${r["--danger-rgb"]}, 0.15)`);
 }
 
